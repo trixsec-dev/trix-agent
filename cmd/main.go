@@ -37,9 +37,7 @@ func run() error {
 		"version", Version,
 		"poll_interval", cfg.PollInterval,
 		"namespaces", cfg.Namespaces,
-		"notify_slack", cfg.SlackWebhook != "",
-		"notify_webhook", cfg.GenericWebhook != "",
-		"notify_saas", cfg.SaasEndpoint != "",
+		"saas_enabled", cfg.SaasEndpoint != "",
 	)
 
 	return srv.Run(context.Background())

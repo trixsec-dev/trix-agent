@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// Config holds all server configuration parsed from environment variables.
+// Config holds all agent configuration parsed from environment variables.
 type Config struct {
-	// Database
-	DatabaseURL string
+	// Database (SQLite file path)
+	DatabasePath string
 
 	// Polling
 	PollInterval time.Duration
@@ -19,13 +19,8 @@ type Config struct {
 	// Cluster identity
 	ClusterName string // Human-readable cluster name for notifications
 
-	// Notifications
-	SlackWebhook   string
-	GenericWebhook string
-	MinSeverity    string // CRITICAL, HIGH, MEDIUM, LOW
-
 	// SAAS integration
-	SaasEndpoint string // Trix SAAS API endpoint (e.g., https://trix.example.com)
+	SaasEndpoint string // Trix SAAS API endpoint (e.g., https://app.trixsec.dev)
 	SaasApiKey   string // API key for SAAS authentication
 
 	// Version (set by serve command)
@@ -43,17 +38,16 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		// Defaults
+		DatabasePath: "/data/trix.db",
 		PollInterval: 5 * time.Minute,
-		MinSeverity:  "CRITICAL",
 		LogFormat:    "json",
 		LogLevel:     "info",
 		HealthAddr:   ":8080",
 	}
 
-	// Required
-	cfg.DatabaseURL = os.Getenv("TRIX_DATABASE_URL")
-	if cfg.DatabaseURL == "" {
-		return nil, fmt.Errorf("TRIX_DATABASE_URL is required")
+	// Optional: Database path (defaults to /data/trix.db)
+	if v := os.Getenv("TRIX_DATABASE_PATH"); v != "" {
+		cfg.DatabasePath = v
 	}
 
 	// Optional: Poll interval
@@ -76,14 +70,6 @@ func LoadConfig() (*Config, error) {
 	// Cluster identity
 	cfg.ClusterName = os.Getenv("TRIX_CLUSTER_NAME")
 
-	// Notifications
-	cfg.SlackWebhook = os.Getenv("TRIX_NOTIFY_SLACK")
-	cfg.GenericWebhook = os.Getenv("TRIX_NOTIFY_WEBHOOK")
-
-	if v := os.Getenv("TRIX_NOTIFY_SEVERITY"); v != "" {
-		cfg.MinSeverity = strings.ToUpper(v)
-	}
-
 	// SAAS integration
 	cfg.SaasEndpoint = os.Getenv("TRIX_SAAS_ENDPOINT")
 	cfg.SaasApiKey = os.Getenv("TRIX_SAAS_API_KEY")
@@ -104,7 +90,7 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-// HasNotifications returns true if at least one notification target is configured.
-func (c *Config) HasNotifications() bool {
-	return c.SlackWebhook != "" || c.GenericWebhook != "" || c.SaasEndpoint != ""
+// HasSaasEndpoint returns true if SaaS endpoint is configured.
+func (c *Config) HasSaasEndpoint() bool {
+	return c.SaasEndpoint != ""
 }

@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // ListConfigAuditReports queries Trivy ConfigAuditReport CRDs
+// If namespace is empty, lists from all namespaces.
 func (c *Client) ListConfigAuditReports(ctx context.Context, namespace string) ([]map[string]interface{}, error) {
 	// Define the GVR (GroupVersionResource) for ConfigAuditReports
 	gvr := schema.GroupVersionResource{
@@ -17,8 +19,14 @@ func (c *Client) ListConfigAuditReports(ctx context.Context, namespace string) (
 		Resource: "configauditreports",
 	}
 
-	// Query the resources
-	list, err := c.dynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	// Query the resources - if namespace is empty, list all namespaces
+	var list *unstructured.UnstructuredList
+	var err error
+	if namespace == "" {
+		list, err = c.dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	} else {
+		list, err = c.dynamicClient.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to list config audit reports: %w", err)
 	}

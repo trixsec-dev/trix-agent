@@ -3,6 +3,7 @@ package trivy
 import (
 	"context"
 	"fmt"
+	"regexp"
 )
 
 // TrivyVulnScanner scans for vulnerabilities using Trivy Operator CRDs
@@ -47,6 +48,11 @@ func (s *TrivyVulnScanner) Scan(ctx context.Context, namespace string) ([]Findin
 			resourceKind = "Pod"
 		}
 
+		// Normalize ReplicaSet to parent Deployment
+		// Trivy reports against ReplicaSets (e.g., cilium-operator-788bd5fdf9)
+		// but users manage Deployments, so we resolve to parent
+		resourceKind, resourceName = normalizeWorkload(resourceKind, resourceName)
+
 		// Extract artifact info (image details)
 		artifact := extractArtifactInfo(report)
 		artifact.ContainerName = containerName
@@ -86,4 +92,26 @@ func extractArtifactInfo(report map[string]interface{}) ArtifactInfo {
 	artifact.Digest, _ = artifactData["digest"].(string)
 
 	return artifact
+}
+
+// replicaSetHashPattern matches the pod-template-hash suffix on ReplicaSet names
+// e.g., "cilium-operator-788bd5fdf9" -> matches "-788bd5fdf9"
+var replicaSetHashPattern = regexp.MustCompile(`-[a-z0-9]{8,10}$`)
+
+// normalizeWorkload converts ReplicaSet to parent Deployment
+// Trivy reports vulnerabilities against ReplicaSets, but users manage Deployments
+func normalizeWorkload(kind, name string) (string, string) {
+	if kind != "ReplicaSet" {
+		return kind, name
+	}
+
+	// Check if name has a pod-template-hash suffix (8-10 alphanumeric chars)
+	if replicaSetHashPattern.MatchString(name) {
+		// Strip the hash suffix to get the Deployment name
+		deploymentName := replicaSetHashPattern.ReplaceAllString(name, "")
+		return "Deployment", deploymentName
+	}
+
+	// No hash suffix, keep as-is (might be a standalone ReplicaSet)
+	return kind, name
 }

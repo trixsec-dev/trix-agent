@@ -24,7 +24,7 @@ type Agent struct {
 func New(config *Config, logger *slog.Logger) (*Agent, error) {
 	ctx := context.Background()
 
-	db, err := NewDB(ctx, config.DatabaseURL)
+	db, err := NewDB(ctx, config.DatabasePath)
 	if err != nil {
 		return nil, err
 	}
@@ -127,8 +127,8 @@ func (a *Agent) runPollLoop(ctx context.Context) {
 func (a *Agent) poll(ctx context.Context) {
 	// Retry previously failed SaaS syncs BEFORE polling for new events.
 	// This prevents double-sending: new events from Poll() would otherwise
-	// be picked up by both retrySaasSync() AND Notify().
-	if a.config.SaasEndpoint != "" {
+	// be picked up by both retrySaasSync() AND SendSaas().
+	if a.config.HasSaasEndpoint() {
 		a.retrySaasSync(ctx)
 	}
 
@@ -138,26 +138,119 @@ func (a *Agent) poll(ctx context.Context) {
 		return
 	}
 
-	if !a.config.HasNotifications() {
+	// Poll compliance benchmarks (CIS, NSA, PSS)
+	a.pollCompliance(ctx)
+
+	// Poll workload inventory for complete asset visibility
+	a.pollWorkloads(ctx)
+
+	// Poll for failed Trivy scan jobs (OOMKilled, etc.)
+	a.pollScanFailures(ctx)
+
+	// Poll for workload network exposure
+	a.pollExposure(ctx)
+
+	if !a.config.HasSaasEndpoint() {
 		return
 	}
 
-	if a.firstPoll {
-		a.firstPoll = false
-		// Only send init notification on fresh start (new vulnerabilities found)
-		// Skip if this is a restart with existing database
-		if len(events) > 0 {
-			result := a.notifier.NotifyInitialized(ctx, events)
-			a.handleSaasResult(ctx, result)
-		} else {
-			a.logger.Info("resumed monitoring, database has existing data")
-		}
-		return
-	}
-
+	// Send vulnerability events to SaaS
 	if len(events) > 0 {
-		result := a.notifier.Notify(ctx, events)
+		result := a.notifier.SendSaas(ctx, events)
 		a.handleSaasResult(ctx, result)
+	}
+}
+
+// pollWorkloads fetches and sends workload inventory to SaaS.
+// This enables the platform to show all workloads, including those without vulnerabilities.
+func (a *Agent) pollWorkloads(ctx context.Context) {
+	if !a.config.HasSaasEndpoint() {
+		return
+	}
+
+	workloads, err := a.poller.PollWorkloads(ctx)
+	if err != nil {
+		a.logger.Error("workload poll failed", "error", err)
+		return
+	}
+
+	if len(workloads) > 0 {
+		if err := a.notifier.SendSaasWorkloads(ctx, workloads); err != nil {
+			a.logger.Error("workload sync failed", "error", err)
+		}
+	}
+}
+
+// pollScanFailures fetches and sends failed Trivy scan jobs to SaaS.
+// This enables alerting on OOMKilled scans and other failures.
+func (a *Agent) pollScanFailures(ctx context.Context) {
+	if !a.config.HasSaasEndpoint() {
+		return
+	}
+
+	failures, err := a.poller.PollScanFailures(ctx)
+	if err != nil {
+		a.logger.Error("scan failures poll failed", "error", err)
+		return
+	}
+
+	if len(failures) > 0 {
+		if err := a.notifier.SendSaasScanFailures(ctx, failures); err != nil {
+			a.logger.Error("scan failures sync failed", "error", err)
+		}
+	}
+}
+
+// pollExposure fetches and sends workload network exposure analysis to SaaS.
+// This enables risk scoring based on network reachability (internet-facing vs isolated).
+func (a *Agent) pollExposure(ctx context.Context) {
+	if !a.config.HasSaasEndpoint() {
+		return
+	}
+
+	exposures, err := a.poller.PollExposure(ctx)
+	if err != nil {
+		a.logger.Error("exposure poll failed", "error", err)
+		return
+	}
+
+	if len(exposures) > 0 {
+		if err := a.notifier.SendSaasExposure(ctx, exposures); err != nil {
+			a.logger.Error("exposure sync failed", "error", err)
+		}
+	}
+}
+
+// pollCompliance fetches and sends compliance benchmark results to SaaS.
+func (a *Agent) pollCompliance(ctx context.Context) {
+	if !a.config.HasSaasEndpoint() {
+		return
+	}
+
+	// Send legacy summary compliance (backwards compat)
+	compliance, err := a.poller.PollCompliance(ctx)
+	if err != nil {
+		a.logger.Error("compliance poll failed", "error", err)
+		return
+	}
+
+	if len(compliance) > 0 {
+		if err := a.notifier.SendSaasCompliance(ctx, compliance); err != nil {
+			a.logger.Error("compliance sync failed", "error", err)
+		}
+	}
+
+	// Send detailed compliance checks (new stateless sync)
+	detailedChecks, err := a.poller.PollDetailedCompliance(ctx)
+	if err != nil {
+		a.logger.Error("detailed compliance poll failed", "error", err)
+		return
+	}
+
+	if len(detailedChecks) > 0 {
+		if err := a.notifier.SendSaasDetailedCompliance(ctx, detailedChecks); err != nil {
+			a.logger.Error("detailed compliance sync failed", "error", err)
+		}
 	}
 }
 
@@ -216,6 +309,7 @@ func (a *Agent) retrySaasSync(ctx context.Context) {
 			ImageRepository: v.ImageRepository,
 			ImageTag:        v.ImageTag,
 			ImageDigest:     v.ImageDigest,
+			FixedVersion:    v.FixedVersion,
 			FirstSeen:       v.FirstSeen,
 			FixedAt:         v.FixedAt,
 		})
