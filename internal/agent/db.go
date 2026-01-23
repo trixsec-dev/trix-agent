@@ -31,6 +31,7 @@ type VulnerabilityRecord struct {
 	ImageRepository string
 	ImageTag        string
 	ImageDigest     string
+	FirstSeenDigest string // digest when vulnerability was first discovered (immutable)
 	FixedVersion    string // version that fixes this vulnerability (from Trivy)
 	State           VulnerabilityState
 	FirstSeen       time.Time
@@ -104,6 +105,7 @@ func (db *DB) migrate(ctx context.Context) error {
 		image_repository TEXT,
 		image_tag TEXT,
 		image_digest TEXT,
+		first_seen_digest TEXT,
 		fixed_version TEXT,
 		state TEXT NOT NULL DEFAULT 'OPEN',
 		first_seen TEXT NOT NULL,
@@ -124,9 +126,12 @@ func (db *DB) migrate(ctx context.Context) error {
 		return err
 	}
 
-	// Migration: add fixed_version column if it doesn't exist (for existing databases)
-	// SQLite doesn't have ADD COLUMN IF NOT EXISTS, so we ignore the error if column exists
+	// Migrations for existing databases (SQLite doesn't have ADD COLUMN IF NOT EXISTS)
 	_, _ = db.conn.ExecContext(ctx, "ALTER TABLE vulnerabilities ADD COLUMN fixed_version TEXT")
+	_, _ = db.conn.ExecContext(ctx, "ALTER TABLE vulnerabilities ADD COLUMN first_seen_digest TEXT")
+
+	// Backfill first_seen_digest from image_digest for existing records
+	_, _ = db.conn.ExecContext(ctx, "UPDATE vulnerabilities SET first_seen_digest = image_digest WHERE first_seen_digest IS NULL AND image_digest IS NOT NULL")
 
 	return nil
 }
@@ -163,7 +168,7 @@ func (db *DB) GetUnsyncedVulnerabilities(ctx context.Context) ([]VulnerabilityRe
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, cve, workload, severity, COALESCE(image, ''),
 		       COALESCE(container_name, ''), COALESCE(image_repository, ''), COALESCE(image_tag, ''), COALESCE(image_digest, ''),
-		       COALESCE(fixed_version, ''), state, first_seen, last_seen, fixed_at
+		       COALESCE(first_seen_digest, ''), COALESCE(fixed_version, ''), state, first_seen, last_seen, fixed_at
 		FROM vulnerabilities
 		WHERE saas_synced = 0
 		ORDER BY first_seen ASC
@@ -182,7 +187,7 @@ func (db *DB) GetUnsyncedVulnerabilities(ctx context.Context) ([]VulnerabilityRe
 
 		if err := rows.Scan(&v.ID, &v.CVE, &v.Workload, &v.Severity, &v.Image,
 			&v.ContainerName, &v.ImageRepository, &v.ImageTag, &v.ImageDigest,
-			&v.FixedVersion, &v.State, &firstSeen, &lastSeen, &fixedAt); err != nil {
+			&v.FirstSeenDigest, &v.FixedVersion, &v.State, &firstSeen, &lastSeen, &fixedAt); err != nil {
 			return nil, err
 		}
 
@@ -212,11 +217,11 @@ func (db *DB) UpsertVulnerability(ctx context.Context, v *VulnerabilityRecord) (
 	).Scan(&existingState)
 
 	if err == sql.ErrNoRows {
-		// New vulnerability - insert
+		// New vulnerability - insert with first_seen_digest (immutable)
 		_, err = db.conn.ExecContext(ctx, `
-			INSERT INTO vulnerabilities (id, cve, workload, severity, image, container_name, image_repository, image_tag, image_digest, fixed_version, state, first_seen, last_seen)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, v.ID, v.CVE, v.Workload, v.Severity, v.Image, v.ContainerName, v.ImageRepository, v.ImageTag, v.ImageDigest, v.FixedVersion, StateOpen, now, now)
+			INSERT INTO vulnerabilities (id, cve, workload, severity, image, container_name, image_repository, image_tag, image_digest, first_seen_digest, fixed_version, state, first_seen, last_seen)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, v.ID, v.CVE, v.Workload, v.Severity, v.Image, v.ContainerName, v.ImageRepository, v.ImageTag, v.ImageDigest, v.ImageDigest, v.FixedVersion, StateOpen, now, now)
 		return true, err
 	}
 
@@ -246,13 +251,26 @@ func (db *DB) UpsertVulnerability(ctx context.Context, v *VulnerabilityRecord) (
 	return false, err
 }
 
-// MarkFixed marks vulnerabilities as fixed if they weren't seen in the current scan.
+// DigestKey uniquely identifies a workload+container combination for digest tracking.
+type DigestKey struct {
+	Workload      string // namespace/kind/name
+	ContainerName string
+}
+
+// MarkFixed marks vulnerabilities as fixed if they weren't seen in the current scan
+// AND the image digest has changed (indicating the image was actually updated).
+//
 // Returns the list of vulnerabilities that were marked as fixed.
+//
+// Logic:
+//   - CVE in scan = stays open (handled by UpsertVulnerability)
+//   - CVE not in scan + same digest = stays open (scan may have failed, or CVE removed from DB)
+//   - CVE not in scan + different digest = fixed (image was updated)
+//   - CVE not in scan + no digest info = stays open (can't confirm fix)
 //
 // IMPORTANT: If currentIDs is empty, we do NOT mark everything as fixed.
 // An empty scan could mean Trivy is down, CRDs are missing, or network issues.
-// Marking everything as fixed on an empty scan would be a critical false positive.
-func (db *DB) MarkFixed(ctx context.Context, currentIDs []string) ([]VulnerabilityRecord, error) {
+func (db *DB) MarkFixed(ctx context.Context, currentIDs []string, currentDigests map[DigestKey]string) ([]VulnerabilityRecord, error) {
 	if len(currentIDs) == 0 {
 		// No vulnerabilities in current scan - DO NOT assume everything is fixed.
 		// This could be due to Trivy being down, missing CRDs, or other issues.
@@ -272,7 +290,7 @@ func (db *DB) MarkFixed(ctx context.Context, currentIDs []string) ([]Vulnerabili
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, cve, workload, severity, COALESCE(image, ''),
 		       COALESCE(container_name, ''), COALESCE(image_repository, ''), COALESCE(image_tag, ''), COALESCE(image_digest, ''),
-		       COALESCE(fixed_version, ''), first_seen
+		       COALESCE(first_seen_digest, ''), COALESCE(fixed_version, ''), first_seen
 		FROM vulnerabilities
 		WHERE state = ?
 	`, StateOpen)
@@ -287,18 +305,40 @@ func (db *DB) MarkFixed(ctx context.Context, currentIDs []string) ([]Vulnerabili
 		var firstSeen string
 		if err := rows.Scan(&v.ID, &v.CVE, &v.Workload, &v.Severity, &v.Image,
 			&v.ContainerName, &v.ImageRepository, &v.ImageTag, &v.ImageDigest,
-			&v.FixedVersion, &firstSeen); err != nil {
+			&v.FirstSeenDigest, &v.FixedVersion, &firstSeen); err != nil {
 			return nil, err
 		}
 
-		// If not in current scan, mark for fixing
-		if !currentSet[v.ID] {
-			v.FirstSeen, _ = time.Parse(time.RFC3339, firstSeen)
-			v.State = StateFixed
-			fixedAt := time.Now()
-			v.FixedAt = &fixedAt
-			toFix = append(toFix, v)
+		// If still in current scan, skip (already handled by UpsertVulnerability)
+		if currentSet[v.ID] {
+			continue
 		}
+
+		// CVE not in current scan - check if digest changed
+		key := DigestKey{Workload: v.Workload, ContainerName: v.ContainerName}
+		currentDigest, hasDigest := currentDigests[key]
+
+		// Only mark as fixed if:
+		// 1. We have digest info for both first_seen and current
+		// 2. The digest has actually changed (image was updated)
+		if !hasDigest || v.FirstSeenDigest == "" {
+			// No digest info available - can't confirm fix, keep open
+			// This is safer than falsely marking as fixed
+			continue
+		}
+
+		if currentDigest == v.FirstSeenDigest {
+			// Same digest - image wasn't updated, CVE can't be fixed
+			// The CVE might have disappeared from scan for other reasons (DB issue, etc.)
+			continue
+		}
+
+		// Digest changed - image was updated, mark as fixed
+		v.FirstSeen, _ = time.Parse(time.RFC3339, firstSeen)
+		v.State = StateFixed
+		fixedAt := time.Now()
+		v.FixedAt = &fixedAt
+		toFix = append(toFix, v)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -325,7 +365,7 @@ func (db *DB) GetOpenVulnerabilities(ctx context.Context) ([]VulnerabilityRecord
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, cve, workload, severity, COALESCE(image, ''),
 		       COALESCE(container_name, ''), COALESCE(image_repository, ''), COALESCE(image_tag, ''), COALESCE(image_digest, ''),
-		       COALESCE(fixed_version, ''), state, first_seen, last_seen, fixed_at
+		       COALESCE(first_seen_digest, ''), COALESCE(fixed_version, ''), state, first_seen, last_seen, fixed_at
 		FROM vulnerabilities WHERE state = ?
 		ORDER BY
 			CASE severity
@@ -350,7 +390,7 @@ func (db *DB) GetOpenVulnerabilities(ctx context.Context) ([]VulnerabilityRecord
 
 		if err := rows.Scan(&v.ID, &v.CVE, &v.Workload, &v.Severity, &v.Image,
 			&v.ContainerName, &v.ImageRepository, &v.ImageTag, &v.ImageDigest,
-			&v.FixedVersion, &v.State, &firstSeen, &lastSeen, &fixedAt); err != nil {
+			&v.FirstSeenDigest, &v.FixedVersion, &v.State, &firstSeen, &lastSeen, &fixedAt); err != nil {
 			return nil, err
 		}
 

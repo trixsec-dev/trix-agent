@@ -103,10 +103,20 @@ func (p *Poller) Poll(ctx context.Context) ([]VulnerabilityEvent, error) {
 	var events []VulnerabilityEvent
 	var currentIDs []string
 
+	// Track current digests per workload+container for MarkFixed logic
+	currentDigests := make(map[DigestKey]string)
+
 	// Process each finding
 	for _, f := range findings {
 		record := p.findingToRecord(f)
 		currentIDs = append(currentIDs, record.ID)
+
+		// Track the current digest for this workload+container
+		// This is used by MarkFixed to determine if image was actually updated
+		if record.ImageDigest != "" {
+			key := DigestKey{Workload: record.Workload, ContainerName: record.ContainerName}
+			currentDigests[key] = record.ImageDigest
+		}
 
 		isNew, err := p.db.UpsertVulnerability(ctx, record)
 		if err != nil {
@@ -132,8 +142,8 @@ func (p *Poller) Poll(ctx context.Context) ([]VulnerabilityEvent, error) {
 		}
 	}
 
-	// Mark vulnerabilities not in current scan as fixed
-	fixed, err := p.db.MarkFixed(ctx, currentIDs)
+	// Mark vulnerabilities not in current scan as fixed (only if digest changed)
+	fixed, err := p.db.MarkFixed(ctx, currentIDs, currentDigests)
 	if err != nil {
 		p.logger.Error("failed to mark fixed vulnerabilities", "error", err)
 	} else {
