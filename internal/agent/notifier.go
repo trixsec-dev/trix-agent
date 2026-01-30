@@ -267,7 +267,6 @@ func (n *Notifier) SendSaasClusterResources(ctx context.Context, data *ClusterRe
 		"timestamp":        time.Now().UTC().Format(time.RFC3339),
 		"cluster_info":     data.ClusterInfo,
 		"service_accounts": data.ServiceAccounts,
-		"secrets":          data.Secrets,
 		"namespaces":       data.Namespaces,
 		"nodes":            data.Nodes,
 	}
@@ -278,7 +277,6 @@ func (n *Notifier) SendSaasClusterResources(ctx context.Context, data *ClusterRe
 
 	n.logger.Info("saas cluster resources sent",
 		"service_accounts", len(data.ServiceAccounts),
-		"secrets", len(data.Secrets),
 		"namespaces", len(data.Namespaces),
 		"nodes", len(data.Nodes))
 	return nil
