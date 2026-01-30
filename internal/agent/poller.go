@@ -402,7 +402,14 @@ func (p *Poller) PollWorkloads(ctx context.Context) ([]kubectl.Workload, error) 
 	// Get scanned workload set from VulnerabilityReports
 	scannedSet := p.getScannedWorkloadSet(ctx)
 
-	// Correlate workloads with scan status
+	// Get namespaces with network policies for hardening status
+	nsWithPolicy, err := k8sClient.GetNamespacesWithNetworkPolicy(ctx)
+	if err != nil {
+		p.logger.Warn("failed to get network policies", "error", err)
+		nsWithPolicy = make(map[string]bool)
+	}
+
+	// Correlate workloads with scan status and network policy
 	for i := range allWorkloads {
 		key := fmt.Sprintf("%s/%s/%s", allWorkloads[i].Namespace, allWorkloads[i].Kind, allWorkloads[i].Name)
 		if scannedSet[key] {
@@ -410,6 +417,9 @@ func (p *Poller) PollWorkloads(ctx context.Context) ([]kubectl.Workload, error) 
 		} else {
 			allWorkloads[i].ScanStatus = "pending"
 		}
+
+		// Set network policy status based on namespace
+		allWorkloads[i].HasNetworkPolicy = nsWithPolicy[allWorkloads[i].Namespace]
 	}
 
 	scannedCount := 0
@@ -519,6 +529,78 @@ func (p *Poller) PollScanFailures(ctx context.Context) ([]trivy.ScanJob, error) 
 
 	p.logger.Info("scan failures poll complete", "count", len(failures))
 	return failures, nil
+}
+
+// PollClusterResources fetches additional cluster resources for risk analysis.
+// This includes ServiceAccounts, Namespaces, and Nodes.
+func (p *Poller) PollClusterResources(ctx context.Context) (*ClusterResourcesData, error) {
+	p.logger.Info("polling cluster resources")
+
+	k8sClient := p.trivyClient.K8sClient()
+	data := &ClusterResourcesData{}
+
+	// Detect cluster info (provider, platform, version)
+	clusterInfo, err := k8sClient.DetectClusterInfo(ctx)
+	if err != nil {
+		p.logger.Warn("failed to detect cluster info", "error", err)
+	} else {
+		data.ClusterInfo = clusterInfo
+		p.logger.Info("detected cluster info",
+			"provider", clusterInfo.Provider,
+			"platform", clusterInfo.Platform,
+			"control_plane", clusterInfo.ControlPlaneType,
+			"version", clusterInfo.KubeVersion)
+	}
+
+	// Poll ServiceAccounts with RBAC bindings
+	if len(p.config.Namespaces) > 0 {
+		for _, ns := range p.config.Namespaces {
+			sas, err := k8sClient.ListServiceAccounts(ctx, ns)
+			if err != nil {
+				p.logger.Warn("failed to list service accounts", "namespace", ns, "error", err)
+				continue
+			}
+			data.ServiceAccounts = append(data.ServiceAccounts, sas...)
+		}
+	} else {
+		sas, err := k8sClient.ListServiceAccounts(ctx, "")
+		if err != nil {
+			p.logger.Warn("failed to list service accounts", "error", err)
+		} else {
+			data.ServiceAccounts = sas
+		}
+	}
+
+	// Poll Namespaces (always cluster-scoped)
+	namespaces, err := k8sClient.ListNamespaces(ctx)
+	if err != nil {
+		p.logger.Warn("failed to list namespaces", "error", err)
+	} else {
+		data.Namespaces = namespaces
+	}
+
+	// Poll Nodes (always cluster-scoped)
+	nodes, err := k8sClient.ListNodes(ctx)
+	if err != nil {
+		p.logger.Warn("failed to list nodes", "error", err)
+	} else {
+		data.Nodes = nodes
+	}
+
+	p.logger.Info("cluster resources poll complete",
+		"service_accounts", len(data.ServiceAccounts),
+		"namespaces", len(data.Namespaces),
+		"nodes", len(data.Nodes))
+
+	return data, nil
+}
+
+// ClusterResourcesData holds all cluster resource information for risk analysis.
+type ClusterResourcesData struct {
+	ClusterInfo     *kubectl.ClusterInfo         `json:"cluster_info,omitempty"`
+	ServiceAccounts []kubectl.ServiceAccountInfo `json:"service_accounts"`
+	Namespaces      []kubectl.NamespaceInfo      `json:"namespaces"`
+	Nodes           []kubectl.NodeInfo           `json:"nodes"`
 }
 
 // PollExposure analyzes network exposure for all workloads.
