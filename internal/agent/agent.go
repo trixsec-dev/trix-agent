@@ -150,6 +150,9 @@ func (a *Agent) poll(ctx context.Context) {
 	// Poll for workload network exposure
 	a.pollExposure(ctx)
 
+	// Poll cluster resources (ServiceAccounts, Secrets, Namespaces, Nodes)
+	a.pollClusterResources(ctx)
+
 	if !a.config.HasSaasEndpoint() {
 		return
 	}
@@ -218,6 +221,24 @@ func (a *Agent) pollExposure(ctx context.Context) {
 		if err := a.notifier.SendSaasExposure(ctx, exposures); err != nil {
 			a.logger.Error("exposure sync failed", "error", err)
 		}
+	}
+}
+
+// pollClusterResources fetches and sends cluster resources to SaaS.
+// This includes ServiceAccounts, Secrets metadata, Namespaces, and Nodes for risk analysis.
+func (a *Agent) pollClusterResources(ctx context.Context) {
+	if !a.config.HasSaasEndpoint() {
+		return
+	}
+
+	data, err := a.poller.PollClusterResources(ctx)
+	if err != nil {
+		a.logger.Error("cluster resources poll failed", "error", err)
+		return
+	}
+
+	if err := a.notifier.SendSaasClusterResources(ctx, data); err != nil {
+		a.logger.Error("cluster resources sync failed", "error", err)
 	}
 }
 

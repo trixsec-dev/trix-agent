@@ -248,6 +248,41 @@ func (n *Notifier) SendSaasExposure(ctx context.Context, exposures []kubectl.Wor
 	return nil
 }
 
+// SendSaasClusterResources sends cluster resource data to the SaaS backend.
+// This includes ServiceAccounts, Secrets metadata, Namespaces, and Nodes for risk analysis.
+func (n *Notifier) SendSaasClusterResources(ctx context.Context, data *ClusterResourcesData) error {
+	if n.config.SaasEndpoint == "" {
+		return nil
+	}
+
+	if data == nil {
+		return nil
+	}
+
+	url := strings.TrimSuffix(n.config.SaasEndpoint, "/") + "/api/v1/cluster-resources"
+
+	payload := map[string]interface{}{
+		"cluster_name":     n.config.ClusterName,
+		"trix_version":     n.config.Version,
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+		"service_accounts": data.ServiceAccounts,
+		"secrets":          data.Secrets,
+		"namespaces":       data.Namespaces,
+		"nodes":            data.Nodes,
+	}
+
+	if err := n.postJSONWithAuth(ctx, url, payload); err != nil {
+		return fmt.Errorf("saas cluster resources sync failed: %w", err)
+	}
+
+	n.logger.Info("saas cluster resources sent",
+		"service_accounts", len(data.ServiceAccounts),
+		"secrets", len(data.Secrets),
+		"namespaces", len(data.Namespaces),
+		"nodes", len(data.Nodes))
+	return nil
+}
+
 func (n *Notifier) postJSONWithAuth(ctx context.Context, url string, payload interface{}) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

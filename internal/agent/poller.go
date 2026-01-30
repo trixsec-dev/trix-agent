@@ -521,6 +521,85 @@ func (p *Poller) PollScanFailures(ctx context.Context) ([]trivy.ScanJob, error) 
 	return failures, nil
 }
 
+// PollClusterResources fetches additional cluster resources for risk analysis.
+// This includes ServiceAccounts, Secrets metadata, Namespaces, and Nodes.
+func (p *Poller) PollClusterResources(ctx context.Context) (*ClusterResourcesData, error) {
+	p.logger.Info("polling cluster resources")
+
+	k8sClient := p.trivyClient.K8sClient()
+	data := &ClusterResourcesData{}
+
+	// Poll ServiceAccounts with RBAC bindings
+	if len(p.config.Namespaces) > 0 {
+		for _, ns := range p.config.Namespaces {
+			sas, err := k8sClient.ListServiceAccounts(ctx, ns)
+			if err != nil {
+				p.logger.Warn("failed to list service accounts", "namespace", ns, "error", err)
+				continue
+			}
+			data.ServiceAccounts = append(data.ServiceAccounts, sas...)
+		}
+	} else {
+		sas, err := k8sClient.ListServiceAccounts(ctx, "")
+		if err != nil {
+			p.logger.Warn("failed to list service accounts", "error", err)
+		} else {
+			data.ServiceAccounts = sas
+		}
+	}
+
+	// Poll Secrets metadata
+	if len(p.config.Namespaces) > 0 {
+		for _, ns := range p.config.Namespaces {
+			secrets, err := k8sClient.ListSecrets(ctx, ns)
+			if err != nil {
+				p.logger.Warn("failed to list secrets", "namespace", ns, "error", err)
+				continue
+			}
+			data.Secrets = append(data.Secrets, secrets...)
+		}
+	} else {
+		secrets, err := k8sClient.ListSecrets(ctx, "")
+		if err != nil {
+			p.logger.Warn("failed to list secrets", "error", err)
+		} else {
+			data.Secrets = secrets
+		}
+	}
+
+	// Poll Namespaces (always cluster-scoped)
+	namespaces, err := k8sClient.ListNamespaces(ctx)
+	if err != nil {
+		p.logger.Warn("failed to list namespaces", "error", err)
+	} else {
+		data.Namespaces = namespaces
+	}
+
+	// Poll Nodes (always cluster-scoped)
+	nodes, err := k8sClient.ListNodes(ctx)
+	if err != nil {
+		p.logger.Warn("failed to list nodes", "error", err)
+	} else {
+		data.Nodes = nodes
+	}
+
+	p.logger.Info("cluster resources poll complete",
+		"service_accounts", len(data.ServiceAccounts),
+		"secrets", len(data.Secrets),
+		"namespaces", len(data.Namespaces),
+		"nodes", len(data.Nodes))
+
+	return data, nil
+}
+
+// ClusterResourcesData holds all cluster resource information for risk analysis.
+type ClusterResourcesData struct {
+	ServiceAccounts []kubectl.ServiceAccountInfo `json:"service_accounts"`
+	Secrets         []kubectl.SecretInfo         `json:"secrets"`
+	Namespaces      []kubectl.NamespaceInfo      `json:"namespaces"`
+	Nodes           []kubectl.NodeInfo           `json:"nodes"`
+}
+
 // PollExposure analyzes network exposure for all workloads.
 // Returns exposure analysis for each workload (Deployments, DaemonSets, StatefulSets).
 func (p *Poller) PollExposure(ctx context.Context) ([]kubectl.WorkloadExposure, error) {
