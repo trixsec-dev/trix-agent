@@ -529,6 +529,19 @@ func (p *Poller) PollClusterResources(ctx context.Context) (*ClusterResourcesDat
 	k8sClient := p.trivyClient.K8sClient()
 	data := &ClusterResourcesData{}
 
+	// Detect cluster info (provider, platform, version)
+	clusterInfo, err := k8sClient.DetectClusterInfo(ctx)
+	if err != nil {
+		p.logger.Warn("failed to detect cluster info", "error", err)
+	} else {
+		data.ClusterInfo = clusterInfo
+		p.logger.Info("detected cluster info",
+			"provider", clusterInfo.Provider,
+			"platform", clusterInfo.Platform,
+			"control_plane", clusterInfo.ControlPlaneType,
+			"version", clusterInfo.KubeVersion)
+	}
+
 	// Poll ServiceAccounts with RBAC bindings
 	if len(p.config.Namespaces) > 0 {
 		for _, ns := range p.config.Namespaces {
@@ -594,6 +607,7 @@ func (p *Poller) PollClusterResources(ctx context.Context) (*ClusterResourcesDat
 
 // ClusterResourcesData holds all cluster resource information for risk analysis.
 type ClusterResourcesData struct {
+	ClusterInfo     *kubectl.ClusterInfo         `json:"cluster_info,omitempty"`
 	ServiceAccounts []kubectl.ServiceAccountInfo `json:"service_accounts"`
 	Secrets         []kubectl.SecretInfo         `json:"secrets"`
 	Namespaces      []kubectl.NamespaceInfo      `json:"namespaces"`

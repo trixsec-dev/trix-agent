@@ -265,6 +265,7 @@ func (n *Notifier) SendSaasClusterResources(ctx context.Context, data *ClusterRe
 		"cluster_name":     n.config.ClusterName,
 		"trix_version":     n.config.Version,
 		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+		"cluster_info":     data.ClusterInfo,
 		"service_accounts": data.ServiceAccounts,
 		"secrets":          data.Secrets,
 		"namespaces":       data.Namespaces,
