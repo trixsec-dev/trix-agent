@@ -6,7 +6,8 @@ before:
     - go fmt ./...
 
 builds:
-  - main: ./cmd
+  - id: trix-agent
+    main: ./cmd
     env:
       - CGO_ENABLED=0
     goos:
@@ -18,15 +19,34 @@ builds:
 
 dockers:
   - image_templates:
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}"
-      - "ghcr.io/trixsec-dev/trix-agent:latest"
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
+    use: buildx
     dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goarch: amd64
+
+  - image_templates:
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/trixsec-dev/trix-agent:latest"
+    image_templates:
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
+      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
 
 checksum:
   name_template: "checksums.txt"
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
