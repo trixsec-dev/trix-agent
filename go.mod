@@ -1,4 +1,4 @@
-module github.com/trixsec-dev/trix-agent
+module github.com/kijosec/agent
 
 go 1.25.0
 

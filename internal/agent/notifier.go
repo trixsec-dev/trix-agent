@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/trixsec-dev/trix-agent/internal/kubectl"
-	"github.com/trixsec-dev/trix-agent/internal/trivy"
+	"github.com/kijosec/agent/internal/kubectl"
+	"github.com/kijosec/agent/internal/trivy"
 )
 
 const (
@@ -70,7 +70,7 @@ func (n *Notifier) SendSaas(ctx context.Context, events []VulnerabilityEvent) *S
 
 		payload := map[string]interface{}{
 			"cluster_name": n.config.ClusterName,
-			"trix_version": n.config.Version,
+			"kijo_version": n.config.Version,
 			"timestamp":    time.Now().UTC().Format(time.RFC3339),
 			"events":       batch,
 		}
@@ -131,7 +131,7 @@ func (n *Notifier) SendSaasCompliance(ctx context.Context, events []ComplianceEv
 
 	payload := map[string]interface{}{
 		"cluster_name": n.config.ClusterName,
-		"trix_version": n.config.Version,
+		"kijo_version": n.config.Version,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"compliance":   events,
 	}
@@ -155,7 +155,7 @@ func (n *Notifier) SendSaasDetailedCompliance(ctx context.Context, checks []Deta
 
 	payload := map[string]interface{}{
 		"cluster_name": n.config.ClusterName,
-		"trix_version": n.config.Version,
+		"kijo_version": n.config.Version,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"checks":       checks,
 	}
@@ -179,7 +179,7 @@ func (n *Notifier) SendSaasWorkloads(ctx context.Context, workloads []kubectl.Wo
 
 	payload := map[string]interface{}{
 		"cluster_name": n.config.ClusterName,
-		"trix_version": n.config.Version,
+		"kijo_version": n.config.Version,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"workloads":    workloads,
 	}
@@ -207,7 +207,7 @@ func (n *Notifier) SendSaasScanFailures(ctx context.Context, failures []trivy.Sc
 
 	payload := map[string]interface{}{
 		"cluster_name": n.config.ClusterName,
-		"trix_version": n.config.Version,
+		"kijo_version": n.config.Version,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"failures":     failures,
 	}
@@ -235,7 +235,7 @@ func (n *Notifier) SendSaasExposure(ctx context.Context, exposures []kubectl.Wor
 
 	payload := map[string]interface{}{
 		"cluster_name": n.config.ClusterName,
-		"trix_version": n.config.Version,
+		"kijo_version": n.config.Version,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"exposures":    exposures,
 	}
@@ -263,7 +263,7 @@ func (n *Notifier) SendSaasClusterResources(ctx context.Context, data *ClusterRe
 
 	payload := map[string]interface{}{
 		"cluster_name":     n.config.ClusterName,
-		"trix_version":     n.config.Version,
+		"kijo_version":     n.config.Version,
 		"timestamp":        time.Now().UTC().Format(time.RFC3339),
 		"cluster_info":     data.ClusterInfo,
 		"service_accounts": data.ServiceAccounts,

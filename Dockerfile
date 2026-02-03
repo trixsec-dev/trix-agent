@@ -5,9 +5,9 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 
 # Copy binary (goreleaser places it in the build context)
-COPY trix-agent /trix-agent
+COPY kijo-agent /kijo-agent
 
 # Run as non-root
 USER 65534:65534
 
-ENTRYPOINT ["/trix-agent"]
+ENTRYPOINT ["/kijo-agent"]

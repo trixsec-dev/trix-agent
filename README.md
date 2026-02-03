@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>trix-agent</h1>
+  <h1>kijo-agent</h1>
   <p><strong>Continuous Security Monitoring Agent for Kubernetes</strong></p>
 
   <p>
@@ -8,10 +8,10 @@
   </p>
 
   <p>
-    <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/trixsec-dev/trix-agent" alt="Go Version"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/trixsec-dev/trix-agent" alt="License"></a>
-    <a href="https://goreportcard.com/report/github.com/trixsec-dev/trix-agent"><img src="https://goreportcard.com/badge/github.com/trixsec-dev/trix-agent" alt="Go Report Card"></a>
-    <a href="https://github.com/trixsec-dev/trix-agent/releases"><img src="https://img.shields.io/github/v/release/trixsec-dev/trix-agent?include_prereleases" alt="Release"></a>
+    <a href="https://go.dev/"><img src="https://img.shields.io/github/go-mod/go-version/kijosec/agent" alt="Go Version"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/kijosec/agent" alt="License"></a>
+    <a href="https://goreportcard.com/report/github.com/kijosec/agent"><img src="https://goreportcard.com/badge/github.com/kijosec/agent" alt="Go Report Card"></a>
+    <a href="https://github.com/kijosec/agent/releases"><img src="https://img.shields.io/github/v/release/kijosec/agent?include_prereleases" alt="Release"></a>
   </p>
 
   <p>
@@ -29,7 +29,7 @@
 
 - **Continuous Monitoring** - Polls Trivy Operator CRDs at configurable intervals
 - **Vulnerability Lifecycle Tracking** - Tracks new and fixed vulnerabilities in PostgreSQL
-- **Multi-Channel Notifications** - Slack, generic webhooks, and Trix SaaS integration
+- **Multi-Channel Notifications** - Slack, generic webhooks, and Kijo SaaS integration
 - **Health Endpoints** - Kubernetes-ready health checks for monitoring
 - **Namespace Filtering** - Monitor specific namespaces or entire cluster
 - **Configurable Severity** - Choose which severity levels trigger notifications
@@ -37,7 +37,7 @@
 
 ## How it Works
 
-trix-agent runs as a service in your Kubernetes cluster and continuously:
+kijo-agent runs as a service in your Kubernetes cluster and continuously:
 
 1. **Polls** Trivy Operator CRDs for security findings
 2. **Tracks** vulnerability state changes in PostgreSQL database
@@ -60,12 +60,12 @@ The agent maintains a history of findings, allowing it to distinguish between:
 
 ```bash
 # Add the Helm repository
-helm repo add trix https://trixsec-dev.github.io/trix
+helm repo add kijo https://kijosec.github.io/kijo
 helm repo update
 
 # Install the agent
-helm install trix-agent trix/trix-agent \
-  --namespace trix-system \
+helm install kijo-agent kijo/kijo-agent \
+  --namespace kijo-system \
   --create-namespace \
   --set databaseUrl=postgresql://user:pass@host:5432/dbname
 ```
@@ -75,79 +75,79 @@ helm install trix-agent trix/trix-agent \
 **Create namespace and secrets:**
 
 ```bash
-kubectl create namespace trix-system
+kubectl create namespace kijo-system
 
 # Create database secret
-kubectl create secret generic trix-agent-db \
-  --namespace trix-system \
+kubectl create secret generic kijo-agent-db \
+  --namespace kijo-system \
   --from-literal=database-url="postgresql://user:pass@host:5432/dbname"
 
 # Optional: Slack webhook secret
-kubectl create secret generic trix-agent-notifications \
-  --namespace trix-system \
+kubectl create secret generic kijo-agent-notifications \
+  --namespace kijo-system \
   --from-literal=slack-webhook="https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
 ```
 
 **Deploy the agent:**
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/trixsec-dev/trix-agent/main/deploy/kubernetes/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/kijosec/agent/main/deploy/kubernetes/deployment.yaml
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/trixsec-dev/trix-agent.git
-cd trix-agent
-go build -o trix-agent ./cmd/...
+git clone https://github.com/kijosec/agent.git
+cd agent
+go build -o kijo-agent ./cmd/...
 ```
 
 ## Configuration
 
-trix-agent is configured via environment variables:
+kijo-agent is configured via environment variables:
 
 ### Database
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `TRIX_DATABASE_URL` | PostgreSQL connection string | ✅ |
+| `KIJO_DATABASE_URL` | PostgreSQL connection string | ✅ |
 
 ### Polling & Filtering
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TRIX_POLL_INTERVAL` | How often to poll Trivy Operator | `5m` |
-| `TRIX_NAMESPACES` | Namespaces to watch (comma-separated) | all |
-| `TRIX_CLUSTER_NAME` | Human-readable cluster name | hostname |
+| `KIJO_POLL_INTERVAL` | How often to poll Trivy Operator | `5m` |
+| `KIJO_NAMESPACES` | Namespaces to watch (comma-separated) | all |
+| `KIJO_CLUSTER_NAME` | Human-readable cluster name | hostname |
 
 ### Notifications
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TRIX_NOTIFY_SLACK` | Slack incoming webhook URL | - |
-| `TRIX_NOTIFY_WEBHOOK` | Generic webhook URL | - |
-| `TRIX_NOTIFY_SEVERITY` | Minimum severity to notify | `CRITICAL` |
+| `KIJO_NOTIFY_SLACK` | Slack incoming webhook URL | - |
+| `KIJO_NOTIFY_WEBHOOK` | Generic webhook URL | - |
+| `KIJO_NOTIFY_SEVERITY` | Minimum severity to notify | `CRITICAL` |
 
 ### SaaS Integration
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TRIX_SAAS_ENDPOINT` | Trix SaaS API endpoint | - |
-| `TRIX_SAAS_API_KEY` | API key for SaaS authentication | - |
+| `KIJO_SAAS_ENDPOINT` | Kijo SaaS API endpoint | - |
+| `KIJO_SAAS_API_KEY` | API key for SaaS authentication | - |
 
 ### Logging & Health
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TRIX_LOG_FORMAT` | Log format (`json` or `text`) | `json` |
-| `TRIX_LOG_LEVEL` | Log level (`debug`, `info`, `warn`, `error`) | `info` |
-| `TRIX_HEALTH_ADDR` | Health check server address | `:8080` |
+| `KIJO_LOG_FORMAT` | Log format (`json` or `text`) | `json` |
+| `KIJO_LOG_LEVEL` | Log level (`debug`, `info`, `warn`, `error`) | `info` |
+| `KIJO_HEALTH_ADDR` | Health check server address | `:8080` |
 
 ## Deployment
 
 ### Kubernetes Deployment
 
-The recommended way to deploy trix-agent is using the provided Kubernetes manifests:
+The recommended way to deploy kijo-agent is using the provided Kubernetes manifests:
 
 ```bash
 # Deploy with default configuration
@@ -171,13 +171,13 @@ For more advanced deployments, use the Helm chart:
 
 ```bash
 # Install with custom values
-helm install trix-agent trix/trix-agent \
-  --namespace trix-system \
+helm install kijo-agent kijo/kijo-agent \
+  --namespace kijo-system \
   --create-namespace \
   --values values.yaml
 
 # Example values.yaml
-databaseUrl: "postgresql://user:pass@postgres:5432/trix"
+databaseUrl: "postgresql://user:pass@postgres:5432/kijo"
 clusterName: "production-eu"
 notifications:
   slack:
@@ -200,7 +200,7 @@ Configure Slack integration to receive notifications about security changes:
 
 ```bash
 # Create Slack incoming webhook
-export TRIX_NOTIFY_SLACK="https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+export KIJO_NOTIFY_SLACK="https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
 ```
 
 **Slack message format:**
@@ -214,7 +214,7 @@ Workloads affected:
 • web-app: CVE-2024-45337 (golang.org/x/crypto)
 • api-server: CVE-2024-3817 (nginx)
 
-View details: https://trix.example.com/clusters/production-eu
+View details: https://kijo.example.com/clusters/production-eu
 ```
 
 ### Generic Webhooks
@@ -222,7 +222,7 @@ View details: https://trix.example.com/clusters/production-eu
 Send notifications to any webhook endpoint:
 
 ```bash
-export TRIX_NOTIFY_WEBHOOK="https://your-webhook.example.com/security"
+export KIJO_NOTIFY_WEBHOOK="https://your-webhook.example.com/security"
 ```
 
 **Webhook payload:**
@@ -237,18 +237,18 @@ export TRIX_NOTIFY_WEBHOOK="https://your-webhook.example.com/security"
 }
 ```
 
-### Trix SaaS Integration
+### Kijo SaaS Integration
 
-Connect to the Trix SaaS platform for centralized vulnerability management:
+Connect to the Kijo SaaS platform for centralized vulnerability management:
 
 ```bash
-export TRIX_SAAS_ENDPOINT="https://api.trix.example.com"
-export TRIX_SAAS_API_KEY="your-api-key-here"
+export KIJO_SAAS_ENDPOINT="https://api.kijo.io"
+export KIJO_SAAS_API_KEY="your-api-key-here"
 ```
 
 ## Health Checks
 
-trix-agent provides HTTP endpoints for Kubernetes health probes:
+kijo-agent provides HTTP endpoints for Kubernetes health probes:
 
 - **`GET /health/live`** - Liveness probe (always returns 200 if service is running)
 - **`GET /health/ready`** - Readiness probe (checks database connectivity)
@@ -275,7 +275,7 @@ readinessProbe:
 
 ### Logs
 
-trix-agent uses structured logging with contextual information:
+kijo-agent uses structured logging with contextual information:
 
 ```json
 {
@@ -331,14 +331,14 @@ kubectl get vulnerabilityreports --all-namespaces
 **Database connection errors:**
 ```bash
 # Check database connectivity
-kubectl exec -n trix-system deployment/trix-agent -- \
-  /trix-agent --database-url=$TRIX_DATABASE_URL --dry-run
+kubectl exec -n kijo-system deployment/kijo-agent -- \
+  /kijo-agent --database-url=$KIJO_DATABASE_URL --dry-run
 ```
 
 **Notification failures:**
 ```bash
 # Test webhook manually
-curl -X POST "$TRIX_NOTIFY_WEBHOOK" \
+curl -X POST "$KIJO_NOTIFY_WEBHOOK" \
   -H "Content-Type: application/json" \
   -d '{"test": true}'
 ```
@@ -349,8 +349,8 @@ Enable debug logging for detailed troubleshooting:
 
 ```bash
 # Update ConfigMap or set environment variable
-TRIX_LOG_LEVEL=debug
-TRIX_LOG_FORMAT=text
+KIJO_LOG_LEVEL=debug
+KIJO_LOG_FORMAT=text
 ```
 
 ## Development
@@ -365,11 +365,11 @@ go mod download
 go test -v ./...
 
 # Build
-go build -o trix-agent ./cmd/...
+go build -o kijo-agent ./cmd/...
 
 # Run locally (requires kubeconfig)
-export TRIX_DATABASE_URL="postgres://..."
-./trix-agent
+export KIJO_DATABASE_URL="postgres://..."
+./kijo-agent
 ```
 
 ### Contributing

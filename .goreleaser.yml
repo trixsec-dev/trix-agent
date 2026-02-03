@@ -6,7 +6,7 @@ before:
     - go fmt ./...
 
 builds:
-  - id: trix-agent
+  - id: kijo-agent
     main: ./cmd
     env:
       - CGO_ENABLED=0
@@ -15,11 +15,11 @@ builds:
     goarch:
       - amd64
       - arm64
-    binary: trix-agent
+    binary: kijo-agent
 
 dockers:
   - image_templates:
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-amd64"
     use: buildx
     dockerfile: Dockerfile
     build_flag_templates:
@@ -27,7 +27,7 @@ dockers:
     goarch: amd64
 
   - image_templates:
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-arm64"
     use: buildx
     dockerfile: Dockerfile
     build_flag_templates:
@@ -35,15 +35,15 @@ dockers:
     goarch: arm64
 
 docker_manifests:
-  - name_template: "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}"
+  - name_template: "ghcr.io/kijosec/agent:{{ .Tag }}"
     image_templates:
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-amd64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-arm64"
 
-  - name_template: "ghcr.io/trixsec-dev/trix-agent:latest"
+  - name_template: "ghcr.io/kijosec/agent:latest"
     image_templates:
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-amd64"
-      - "ghcr.io/trixsec-dev/trix-agent:{{ .Tag }}-arm64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-amd64"
+      - "ghcr.io/kijosec/agent:{{ .Tag }}-arm64"
 
 checksum:
   name_template: "checksums.txt"
@@ -61,7 +61,7 @@ changelog:
 
 release:
   github:
-    owner: trixsec-dev
-    name: trix-agent
+    owner: kijosec
+    name: agent
   draft: false
   prerelease: auto

@@ -20,7 +20,7 @@ type Config struct {
 	ClusterName string // Human-readable cluster name for notifications
 
 	// SAAS integration
-	SaasEndpoint string // Trix SAAS API endpoint (e.g., https://app.trixsec.dev)
+	SaasEndpoint string // Kijo SAAS API endpoint (e.g., https://app.kijo.io)
 	SaasApiKey   string // API key for SAAS authentication
 
 	// Version (set by serve command)
@@ -38,29 +38,29 @@ type Config struct {
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		// Defaults
-		DatabasePath: "/data/trix.db",
+		DatabasePath: "/data/kijo.db",
 		PollInterval: 5 * time.Minute,
 		LogFormat:    "json",
 		LogLevel:     "info",
 		HealthAddr:   ":8080",
 	}
 
-	// Optional: Database path (defaults to /data/trix.db)
-	if v := os.Getenv("TRIX_DATABASE_PATH"); v != "" {
+	// Optional: Database path (defaults to /data/kijo.db)
+	if v := os.Getenv("KIJO_DATABASE_PATH"); v != "" {
 		cfg.DatabasePath = v
 	}
 
 	// Optional: Poll interval
-	if v := os.Getenv("TRIX_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("KIJO_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid TRIX_POLL_INTERVAL: %w", err)
+			return nil, fmt.Errorf("invalid KIJO_POLL_INTERVAL: %w", err)
 		}
 		cfg.PollInterval = d
 	}
 
 	// Optional: Namespaces (comma-separated)
-	if v := os.Getenv("TRIX_NAMESPACES"); v != "" {
+	if v := os.Getenv("KIJO_NAMESPACES"); v != "" {
 		cfg.Namespaces = strings.Split(v, ",")
 		for i := range cfg.Namespaces {
 			cfg.Namespaces[i] = strings.TrimSpace(cfg.Namespaces[i])
@@ -68,22 +68,22 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Cluster identity
-	cfg.ClusterName = os.Getenv("TRIX_CLUSTER_NAME")
+	cfg.ClusterName = os.Getenv("KIJO_CLUSTER_NAME")
 
 	// SAAS integration
-	cfg.SaasEndpoint = os.Getenv("TRIX_SAAS_ENDPOINT")
-	cfg.SaasApiKey = os.Getenv("TRIX_SAAS_API_KEY")
+	cfg.SaasEndpoint = os.Getenv("KIJO_SAAS_ENDPOINT")
+	cfg.SaasApiKey = os.Getenv("KIJO_SAAS_API_KEY")
 
 	// Logging
-	if v := os.Getenv("TRIX_LOG_FORMAT"); v != "" {
+	if v := os.Getenv("KIJO_LOG_FORMAT"); v != "" {
 		cfg.LogFormat = v
 	}
-	if v := os.Getenv("TRIX_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("KIJO_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
 	}
 
 	// Health
-	if v := os.Getenv("TRIX_HEALTH_ADDR"); v != "" {
+	if v := os.Getenv("KIJO_HEALTH_ADDR"); v != "" {
 		cfg.HealthAddr = v
 	}
 

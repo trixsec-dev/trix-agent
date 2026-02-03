@@ -4,7 +4,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/trixsec-dev/trix-agent/internal/kubectl"
+	"github.com/kijosec/agent/internal/kubectl"
 )
 
 // Client wraps kubectl.Client for Trivy-specific operations

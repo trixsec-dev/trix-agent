@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/trixsec-dev/trix-agent/internal/agent"
+	"github.com/kijosec/agent/internal/agent"
 )
 
 // Version is set at build time via ldflags
@@ -33,7 +33,7 @@ func run() error {
 		return err
 	}
 
-	logger.Info("trix-agent starting",
+	logger.Info("kijo-agent starting",
 		"version", Version,
 		"poll_interval", cfg.PollInterval,
 		"namespaces", cfg.Namespaces,

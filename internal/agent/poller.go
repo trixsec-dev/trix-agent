@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/trixsec-dev/trix-agent/internal/kubectl"
-	"github.com/trixsec-dev/trix-agent/internal/trivy"
+	"github.com/kijosec/agent/internal/kubectl"
+	"github.com/kijosec/agent/internal/trivy"
 )
 
 // VulnerabilityEvent represents a change in vulnerability state.
