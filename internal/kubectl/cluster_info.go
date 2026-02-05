@@ -104,6 +104,15 @@ func (c *Client) detectFromNodeLabels(ctx context.Context, info *ClusterInfo) er
 			return nil
 		}
 
+		// Scaleway Kapsule detection
+		if _, ok := labels["k8s.scaleway.com/managed"]; ok {
+			info.Provider = "kapsule"
+			info.ControlPlaneType = "managed"
+			info.Platform = "scaleway"
+			info.DetectedBy = append(info.DetectedBy, "node-label:k8s.scaleway.com/managed")
+			return nil
+		}
+
 		// OpenShift detection
 		if _, ok := labels["node.openshift.io/os_id"]; ok {
 			info.Provider = "openshift"
